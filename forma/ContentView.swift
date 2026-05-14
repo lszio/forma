@@ -1,66 +1,136 @@
-//
-//  ContentView.swift
-//  forma
-//
-//  Created by lszio on 2026/5/14.
-//
-
 import SwiftUI
 import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @StateObject private var contextManager = ContextManager()
+    @StateObject private var resolver: IntentResolver
+    
+    init(modelContext: ModelContext) {
+        _resolver = StateObject(wrappedValue: IntentResolver(modelContext: modelContext))
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    SectionHeader(title: "Current Intent")
+                    
+                    if resolver.activeSpaces.isEmpty {
+                        ContentUnavailableView("No Active Intent", systemImage: "sparkles", description: Text("Your context doesn't match any spaces right now."))
+                            .frame(height: 200)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                            ForEach(resolver.activeSpaces) { space in
+                                NavigationLink(value: space) {
+                                    SpaceCardView(space: space, isActive: true)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
+                    
+                    SectionHeader(title: "All Spaces")
+                    
+                    SpaceList(modelContext: modelContext, resolver: resolver)
                 }
-                .onDelete(perform: deleteItems)
+                .padding()
             }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
+            .navigationTitle("Intent Layer")
+            .navigationDestination(for: Space.self) { space in
+                SpaceDetailView(space: space)
+            }
             .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: addDefaultSpaces) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
                     }
                 }
             }
-        } detail: {
-            Text("Select an item")
+            .onAppear {
+                resolver.update(with: contextManager.currentContext)
+            }
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+    private func addDefaultSpaces() {
+        let workSpace = Space(
+            name: "Work",
+            icon: "briefcase",
+            actions: [.openApp(AppID(bundleId: "com.apple.mail"), scheme: "message://")],
+            ruleTree: .time(TimeRule(startHour: 9, endHour: 18, weekdays: [2, 3, 4, 5, 6]))
+        )
+        
+        let homeSpace = Space(
+            name: "Home",
+            icon: "house",
+            actions: [.openApp(AppID(bundleId: "com.apple.Music"), scheme: "music://")],
+            ruleTree: .or([
+                .time(TimeRule(startHour: 18, endHour: 23, weekdays: [1, 2, 3, 4, 5, 6, 7])),
+                .time(TimeRule(startHour: 7, endHour: 9, weekdays: [1, 2, 3, 4, 5, 6, 7]))
+            ])
+        )
+        
+        modelContext.insert(workSpace)
+        modelContext.insert(homeSpace)
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+        resolver.update(with: contextManager.currentContext)
+    }
+}
+
+struct SectionHeader: View {
+    let title: String
+    var body: some View {
+        Text(title)
+            .font(.title3.bold())
+            .padding(.top)
+    }
+}
+
+struct SpaceList: View {
+    let modelContext: ModelContext
+    @ObservedObject var resolver: IntentResolver
+    @Query private var allSpaces: [Space]
+    
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+            ForEach(allSpaces) { space in
+                if !resolver.activeSpaces.contains(where: { $0.id == space.id }) {
+                    NavigationLink(value: space) {
+                        SpaceCardView(space: space, isActive: false)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
 }
 
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+struct SpaceDetailView: View {
+    @Bindable var space: Space
+    
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 20) {
+                ForEach(0..<space.actions.count, id: \.self) { index in
+                    ActionIconView(action: space.actions[index])
+                        .onTapGesture {
+                            ActionExecutor.shared.execute(space.actions[index])
+                        }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle(space.name)
+        .toolbar {
+            ToolbarItem {
+                NavigationLink {
+                    SpaceEditorView(space: space)
+                } label: {
+                    Text("Edit")
+                }
+            }
+        }
+    }
 }

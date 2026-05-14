@@ -9,9 +9,9 @@ import WidgetKit
 import SwiftUI
 
 @main
-struct WidgetBundle: WidgetBundle {
+struct formaWidgetBundle: WidgetBundle {
     var body: some Widget {
-        Widget()
+        formaWidget()
         WidgetControl()
         WidgetLiveActivity()
     }

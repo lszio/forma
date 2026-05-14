@@ -6,5 +6,39 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>music</string>
+		<string>message</string>
+		<string>mailto</string>
+		<string>calshow</string>
+		<string>maps</string>
+		<string>tel</string>
+		<string>contacts</string>
+		<string>itms-apps</string>
+		<string>shareddocuments</string>
+		<string>photos-redirect</string>
+		<string>camera</string>
+		<string>mobilenotes</string>
+		<string>x-apple-reminder</string>
+		<string>calc</string>
+		<string>ibooks</string>
+		<string>weixin</string>
+		<string>whatsapp</string>
+		<string>instagram</string>
+		<string>twitter</string>
+		<string>spotify</string>
+		<string>youtube</string>
+		<string>slack</string>
+		<string>notion</string>
+		<string>mqq</string>
+		<string>tg</string>
+		<string>fb-messenger</string>
+		<string>snssdk1233</string>
+		<string>nflx</string>
+		<string>zoomus</string>
+		<string>msteams</string>
+		<string>googledrive</string>
+	</array>
 </dict>
 </plist>

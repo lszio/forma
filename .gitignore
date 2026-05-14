@@ -1,0 +1,31 @@
+# Xcode Project Files
+*.pbxuser
+*.pbxproj.bak*
+
+# Xcode Workspace Files
+*.xcworkspace/*
+!*.xcworkspace/*xcshareddata*
+
+# Build Products
+build/
+DerivedData/
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/
+Cartfile.resolved
+
+# macOS Files
+.DS_Store
+
+# Editor Directories and Files
+.idea/
+.vscode/
+
+# Sensitive Information
+api_keys.txt
+user_data.json
+xcuserdata/
