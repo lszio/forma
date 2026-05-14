@@ -9,6 +9,8 @@
 # Build Products
 build/
 DerivedData/
+*.xcresult
+*.xcarchive
 
 # CocoaPods
 Pods/
