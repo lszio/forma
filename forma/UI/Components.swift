@@ -59,7 +59,7 @@ struct ActionIconView: View {
     private func iconForAction(_ action: ActionNode) -> some View {
         switch action {
         case .openApp(let appId, _):
-            if let app = SystemApp.library.first(where: { $0.id == appId.bundleId }) {
+            if let app = (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appId.bundleId }) {
                 Image(systemName: app.icon)
             } else {
                 Image(systemName: "app.dashed")
@@ -78,7 +78,7 @@ struct ActionIconView: View {
     private func nameForAction(_ action: ActionNode) -> String {
         switch action {
         case .openApp(let appId, _):
-            return SystemApp.library.first(where: { $0.id == appId.bundleId })?.name ?? "App"
+            return (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appId.bundleId })?.name ?? "App"
         case .url(let url):
             return url.host ?? "Link"
         default:

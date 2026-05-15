@@ -9,48 +9,76 @@ class AppDiscoveryService: ObservableObject {
     @Published var isScanning = false
     
     static let shared = AppDiscoveryService()
-    private let remoteRegistryURL = URL(string: "https://api.intentorganizer.com/v1/registry.json")
     
     private init() {}
     
     func performDiscovery() async {
         isScanning = true
         
-        // 1. Load Static Library
-        var potentialApps = SystemApp.library
-        
-        // 2. Fetch Remote Registry (Simulated)
-        if let remoteApps = await fetchRemoteRegistry() {
-            potentialApps.append(contentsOf: remoteApps)
-        }
-        
-        // 3. De-duplicate by ID
-        let uniqueApps = Array(Dictionary(grouping: potentialApps, by: { $0.id }).compactMap { $0.value.first })
-        
         var found: [SystemApp] = []
-        for app in uniqueApps {
-            #if os(iOS)
-            if let url = URL(string: app.scheme), UIApplication.shared.canOpenURL(url) {
+        
+        // 1. Check Library Apps
+        for app in SystemApp.library {
+            if isAppInstalled(bundleId: app.id, scheme: app.scheme) {
                 found.append(app)
             }
-            #else
-            found.append(app)
-            #endif
-            
-            self.availableApps = found
-            // Smaller delay for better UX
-            try? await Task.sleep(nanoseconds: 5_000_000)
         }
         
+        // 2. Scan /Applications (macOS only)
+        #if os(macOS)
+        let localApps = scanApplicationsDirectory()
+        for app in localApps {
+            if !found.contains(where: { $0.id == app.id }) {
+                found.append(app)
+            }
+        }
+        #endif
+        
+        self.availableApps = found
         isScanning = false
     }
     
-    private func fetchRemoteRegistry() async -> [SystemApp]? {
-        // In a real implementation, this would be a URLSession call.
-        // We simulate a small delay and returning a new app not in the static library.
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        return [
-            SystemApp(id: "com.disney.disneyplus", name: "Disney+", icon: "tv.fill", scheme: "disneyplus://", category: .entertainment)
-        ]
+    private func isAppInstalled(bundleId: String, scheme: String) -> Bool {
+        #if os(iOS)
+        if let url = URL(string: scheme), UIApplication.shared.canOpenURL(url) {
+            return true
+        }
+        return false
+        #elseif os(macOS)
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) != nil
+        #else
+        return false
+        #endif
     }
+    
+    #if os(macOS)
+    private func scanApplicationsDirectory() -> [SystemApp] {
+        let fileManager = FileManager.default
+        let appDir = "/Applications"
+        var foundApps: [SystemApp] = []
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(atPath: appDir)
+            for item in contents where item.hasSuffix(".app") {
+                let appPath = (appDir as NSString).appendingPathComponent(item)
+                if let bundle = Bundle(path: appPath) {
+                    let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? item.replacingOccurrences(of: ".app", with: "")
+                    let bundleId = bundle.bundleIdentifier ?? "unknown.\(item)"
+                    
+                    foundApps.append(SystemApp(
+                        id: bundleId,
+                        name: name,
+                        icon: "app", // Default icon for now
+                        scheme: "",
+                        category: .custom
+                    ))
+                }
+            }
+        } catch {
+            print("Error scanning /Applications: \(error)")
+        }
+        
+        return foundApps
+    }
+    #endif
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-enum ActionNode: Codable {
+enum ActionNode: Codable, Hashable {
     case openApp(AppID, scheme: String?)
     case openSpace(UUID)
     case shortcut(String)
