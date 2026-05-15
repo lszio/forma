@@ -77,7 +77,20 @@ struct RuleNodeView: View {
             FocusRuleEditor(rule: rule) { newRule in
                 onUpdate(.focus(newRule))
             }
+        case .device(let rule):
+            DeviceRuleEditor(rule: rule) { newRule in
+                onUpdate(.device(newRule))
+            }
         }
+    }
+}
+
+struct DeviceRuleEditor: View {
+    let rule: ConnectedDeviceRule
+    let onUpdate: (ConnectedDeviceRule) -> Void
+    
+    var body: some View {
+        TextField("Device Identifier", text: Binding(get: { rule.deviceIdentifier }, set: { onUpdate(ConnectedDeviceRule(deviceIdentifier: $0)) }))
     }
 }
 

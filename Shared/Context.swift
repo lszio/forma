@@ -1,13 +1,14 @@
 import Foundation
 
 struct Context: Codable, Hashable {
-    let now: Date
+    let time: Date
+    let currentFocusMode: String?
+    let connectedDevices: [String] // e.g., Bluetooth device identifiers or Wi-Fi SSIDs
+    
+    // Additional properties for advanced matching
     let weekday: Int
     let batteryLevel: Float
     let lowPowerMode: Bool
-    let focusMode: String?
-    let recentUsage: [String: TimeInterval]
-    let appUsageFrequency: [String: Int]
     let deviceState: DeviceState
 }
 
@@ -25,4 +26,3 @@ struct DeviceState: Codable, Hashable {
         case wifi, cellular, none
     }
 }
-

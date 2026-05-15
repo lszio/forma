@@ -12,13 +12,12 @@ class ContextManager: ObservableObject {
     init() {
         // Initial mock context
         self.currentContext = Context(
-            now: Date(),
+            time: Date(),
+            currentFocusMode: nil,
+            connectedDevices: [],
             weekday: Calendar.current.component(.weekday, from: Date()),
             batteryLevel: 0.8,
             lowPowerMode: false,
-            focusMode: nil,
-            recentUsage: [:],
-            appUsageFrequency: [:],
             deviceState: DeviceState(
                 isCharging: false,
                 screenBrightness: 0.5,
@@ -48,13 +47,12 @@ class ContextManager: ObservableObject {
         #endif
         
         self.currentContext = Context(
-            now: Date(),
+            time: Date(),
+            currentFocusMode: nil, // Requires specialized APIs or focus intent
+            connectedDevices: [],
             weekday: Calendar.current.component(.weekday, from: Date()),
             batteryLevel: batteryLevel,
             lowPowerMode: false, // Could use ProcessInfo.processInfo.isLowPowerModeEnabled
-            focusMode: nil, // Requires specialized APIs or focus intent
-            recentUsage: [:],
-            appUsageFrequency: [:],
             deviceState: DeviceState(
                 isCharging: isCharging,
                 screenBrightness: 0.5,

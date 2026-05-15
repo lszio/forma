@@ -20,7 +20,18 @@ struct formaApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // If creation fails, it might be due to an incompatible schema.
+            // In a production app, you'd perform a migration. 
+            // For this dev version, we can attempt to recreate the container by clearing the store.
+            print("ModelContainer initialization failed: \(error). Attempting to recreate...")
+            
+            // Try in-memory as a fallback to avoid crash
+            let inMemoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                return try ModelContainer(for: schema, configurations: [inMemoryConfig])
+            } catch {
+                fatalError("Could not create ModelContainer even in memory: \(error)")
+            }
         }
     }()
 

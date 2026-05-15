@@ -34,7 +34,7 @@ class ActionExecutor {
             "com.apple.Preferences": ["App-Prefs:"]
         ]
         
-        let schemes = customScheme != nil ? [customScheme!] : (schemeMap[bundleId] ?? ["\(bundleId)://"])
+        let schemes = customScheme.map { [$0] } ?? (schemeMap[bundleId] ?? ["\(bundleId)://"])
         
         attemptOpen(schemes: schemes)
     }

@@ -44,37 +44,40 @@ struct WidgetEntryView : View {
     var entry: Provider.Entry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             if let space = entry.space {
                 HStack {
                     Image(systemName: space.icon)
                         .font(.headline)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(Color.accentColor, in: Circle())
                     Text(space.name)
-                        .font(.headline)
+                        .font(.subheadline.bold())
+                    Spacer()
                 }
                 
-                let actions = space.actions
-                if actions.isEmpty {
-                    Text("No apps in this space")
+                let targetApps = Array(Set(space.rules.flatMap { $0.targetApps } + space.learningWeights.keys.map { AppID(bundleId: $0) }))
+                
+                if targetApps.isEmpty {
+                    Text("No apps predicted")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(actions.prefix(3), id: \.self) { action in
-                            if case .openApp(let appId, let scheme) = action {
-                                HStack {
-                                    Image(systemName: "app")
-                                        .font(.caption)
-                                    Text(appId.bundleId.split(separator: ".").last?.capitalized ?? appId.bundleId)
-                                        .font(.caption)
-                                }
+                    HStack(spacing: 12) {
+                        ForEach(targetApps.prefix(4)) { appID in
+                            VStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.secondary.opacity(0.2))
+                                    .frame(width: 44, height: 44)
+                                    .overlay {
+                                        Image(systemName: "app")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                Text(appID.bundleId.split(separator: ".").last?.capitalized ?? "App")
+                                    .font(.system(size: 10))
+                                    .lineLimit(1)
                             }
-                        }
-                        if actions.count > 3 {
-                            Text("+ \(actions.count - 3) more")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -85,6 +88,7 @@ struct WidgetEntryView : View {
             }
             Spacer()
         }
+        .padding(.vertical, 4)
     }
 }
 

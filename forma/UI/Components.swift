@@ -34,8 +34,8 @@ struct SpaceCardView: View {
     }
 }
 
-struct ActionIconView: View {
-    let action: ActionNode
+struct AppIconView: View {
+    let appID: AppID
     
     var body: some View {
         VStack(spacing: 8) {
@@ -44,45 +44,27 @@ struct ActionIconView: View {
                     .fill(Color(.secondarySystemGroupedBackground))
                     .frame(width: 60, height: 60)
                 
-                iconForAction(action)
+                iconForApp(appID)
                     .font(.title2)
                     .foregroundStyle(Color.accentColor)
             }
             
-            Text(nameForAction(action))
+            Text(nameForApp(appID))
                 .font(.caption2)
                 .lineLimit(1)
         }
     }
     
     @ViewBuilder
-    private func iconForAction(_ action: ActionNode) -> some View {
-        switch action {
-        case .openApp(let appId, _):
-            if let app = (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appId.bundleId }) {
-                Image(systemName: app.icon)
-            } else {
-                Image(systemName: "app.dashed")
-            }
-        case .url:
-            Image(systemName: "link")
-        case .shortcut:
-            Image(systemName: "command")
-        case .openSpace:
-            Image(systemName: "arrow.right.circle")
-        default:
-            Image(systemName: "ellipsis.circle")
+    private func iconForApp(_ appID: AppID) -> some View {
+        if let app = (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appID.bundleId }) {
+            Image(systemName: app.icon)
+        } else {
+            Image(systemName: "app.dashed")
         }
     }
     
-    private func nameForAction(_ action: ActionNode) -> String {
-        switch action {
-        case .openApp(let appId, _):
-            return (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appId.bundleId })?.name ?? "App"
-        case .url(let url):
-            return url.host ?? "Link"
-        default:
-            return "Action"
-        }
+    private func nameForApp(_ appID: AppID) -> String {
+        return (SystemApp.library + AppDiscoveryService.shared.availableApps).first(where: { $0.id == appID.bundleId })?.name ?? appID.bundleId.split(separator: ".").last?.capitalized ?? "App"
     }
 }

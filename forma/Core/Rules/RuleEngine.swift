@@ -2,13 +2,15 @@ import Foundation
 
 struct RuleEngine {
     func resolve(spaces: [Space], context: Context) -> [Space] {
-        let evaluator = IntentEvaluator(context: context)
         return spaces.filter { space in
-            guard space.safeIsEnabled else { return false }
-            guard let rule = space.ruleTree else {
-                return true
+            // If the space has no rules, we might consider it always active or never active.
+            // Let's assume a space with no rules relies on dynamic learning, but for pure rule engine:
+            if space.rules.isEmpty { return true }
+            
+            // A space is active if ANY of its rules evaluate to true
+            return space.rules.contains { rule in
+                rule.evaluate(with: context)
             }
-            return evaluator.evaluate(rule)
         }
     }
 }

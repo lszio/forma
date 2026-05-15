@@ -38,7 +38,7 @@ struct ContentView: View {
             }
             .navigationTitle("Intent Layer")
             .navigationDestination(for: Space.self) { space in
-                SpaceDetailView(space: space)
+                SpaceDetailView(space: space, context: contextManager.currentContext)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -55,21 +55,21 @@ struct ContentView: View {
     }
 
     private func addDefaultSpaces() {
+        let workRule = Rule(triggerNode: .time(TimeRule(startHour: 9, endHour: 18, weekdays: [2, 3, 4, 5, 6])), targetApps: [AppID(bundleId: "com.apple.mail")], priority: 1)
         let workSpace = Space(
             name: "Work",
             icon: "briefcase",
-            actions: [.openApp(AppID(bundleId: "com.apple.mail"), scheme: "message://")],
-            ruleTree: .time(TimeRule(startHour: 9, endHour: 18, weekdays: [2, 3, 4, 5, 6]))
+            rules: [workRule]
         )
         
+        let homeRule = Rule(triggerNode: .or([
+                .time(TimeRule(startHour: 18, endHour: 23, weekdays: [1, 2, 3, 4, 5, 6, 7])),
+                .time(TimeRule(startHour: 7, endHour: 9, weekdays: [1, 2, 3, 4, 5, 6, 7]))
+            ]), targetApps: [AppID(bundleId: "com.apple.Music")], priority: 1)
         let homeSpace = Space(
             name: "Home",
             icon: "house",
-            actions: [.openApp(AppID(bundleId: "com.apple.Music"), scheme: "music://")],
-            ruleTree: .or([
-                .time(TimeRule(startHour: 18, endHour: 23, weekdays: [1, 2, 3, 4, 5, 6, 7])),
-                .time(TimeRule(startHour: 7, endHour: 9, weekdays: [1, 2, 3, 4, 5, 6, 7]))
-            ])
+            rules: [homeRule]
         )
         
         modelContext.insert(workSpace)
@@ -109,15 +109,26 @@ struct SpaceList: View {
 
 struct SpaceDetailView: View {
     @Bindable var space: Space
+    let context: Context
     
     var body: some View {
+        let targetApps = ConflictResolver.resolveApps(for: space, context: context)
+        
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 20) {
-                ForEach(0..<space.actions.count, id: \.self) { index in
-                    ActionIconView(action: space.actions[index])
-                        .onTapGesture {
-                            ActionExecutor.shared.execute(space.actions[index])
-                        }
+                if targetApps.isEmpty {
+                    Text("No apps predicted")
+                        .foregroundStyle(.secondary)
+                        .padding()
+                } else {
+                    ForEach(targetApps) { appID in
+                        AppIconView(appID: appID)
+                            .onTapGesture {
+                                // Simulate launching the app and recording the interaction
+                                LearningEngine.shared.recordInteraction(with: appID, in: space)
+                                ActionExecutor.shared.execute(.openApp(appID, scheme: nil))
+                            }
+                    }
                 }
             }
             .padding()
