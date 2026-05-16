@@ -7,6 +7,8 @@ final class Space: Identifiable {
     var name: String
     var icon: String
     var isDynamic: Bool
+    var tags: [String]
+    var orderedAppIds: [String] // Explicitly ordered app IDs
     var rulesData: Data
     var learningWeightsData: Data
 
@@ -34,12 +36,16 @@ final class Space: Identifiable {
          name: String, 
          icon: String, 
          isDynamic: Bool = true,
+         tags: [String] = [],
+         orderedAppIds: [String] = [],
          rules: [Rule] = [],
          learningWeights: [String: Float] = [:]) {
         self.id = id
         self.name = name
         self.icon = icon
         self.isDynamic = isDynamic
+        self.tags = tags
+        self.orderedAppIds = orderedAppIds
         
         self.rulesData = (try? JSONEncoder().encode(rules)) ?? Data()
         self.learningWeightsData = (try? JSONEncoder().encode(learningWeights)) ?? Data()
