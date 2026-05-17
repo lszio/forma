@@ -12,32 +12,30 @@ import SwiftData
 struct formaApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Space.self,
-            DiscoveredApp.self
+            Space.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .private("iCloud.lszio.forma")
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            // If creation fails, it might be due to an incompatible schema.
-            // In a production app, you'd perform a migration. 
-            // For this dev version, we can attempt to recreate the container by clearing the store.
-            print("ModelContainer initialization failed: \(error). Attempting to recreate...")
-            
-            // Try in-memory as a fallback to avoid crash
-            let inMemoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            print("ModelContainer initialization failed: \(error). Falling back to local...")
+            let localConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             do {
-                return try ModelContainer(for: schema, configurations: [inMemoryConfig])
+                return try ModelContainer(for: schema, configurations: [localConfig])
             } catch {
-                fatalError("Could not create ModelContainer even in memory: \(error)")
+                fatalError("Could not create ModelContainer: \(error)")
             }
         }
     }()
 
     var body: some Scene {
         WindowGroup {
-            ContentView(modelContext: sharedModelContainer.mainContext)
+            ContentView()
         }
         .modelContainer(sharedModelContainer)
     }

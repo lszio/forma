@@ -26,20 +26,15 @@ struct Provider: AppIntentTimelineProvider {
         do {
             let modelContainer = try ModelContainer(for: Space.self)
             
-            // If user has specifically selected a space in widget settings
+            // 1. Specifically selected space
             if let selectedId = configuration.space?.id {
                 let descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == selectedId })
                 return try modelContainer.mainContext.fetch(descriptor).first
             }
             
-            // DEFAULT logic: Dynamic Intent
-            // In a full implementation, we would build a Context here and run the Rule Engine.
-            // For now, we take the most 'recently active' or first space as the 'Dynamic Intent'.
+            // 2. Default: All Apps or first available
             let allSpaces = try modelContainer.mainContext.fetch(FetchDescriptor<Space>())
-            
-            // Simulate Intent: Find space that matches current time rule or has most weight
-            // Returning the first one for now as the "Inferred Intent"
-            return allSpaces.first
+            return allSpaces.first { $0.name == "Dashboard" } ?? allSpaces.first
         } catch {
             return nil
         }
@@ -53,102 +48,69 @@ struct SimpleEntry: TimelineEntry {
 
 struct WidgetEntryView : View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) var family
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             if let space = entry.space {
-                HStack {
-                    Image(systemName: space.icon)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(6)
-                        .background(Color.accentColor, in: Circle())
-                    
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(space.name)
-                            .font(.subheadline.bold())
-                        if !space.tags.isEmpty {
-                            Text(space.tags.joined(separator: " • "))
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                }
+                // Style: Siri Suggestions style grid
+                let appIds = space.appIds
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
                 
-                // For Widget, we use the Space's own app order + learning
-                let targetApps = Array(Set(space.orderedAppIds + space.rules.flatMap { $0.targetApps.map { $0.bundleId } } + space.learningWeights.keys))
-                    .prefix(4)
-                    .map { AppID(bundleId: $0) }
-                
-                if targetApps.isEmpty {
-                    Text("No apps predicted")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    HStack(spacing: 12) {
-                        ForEach(targetApps) { appID in
-                            VStack(spacing: 4) {
-                                // NATIVE ICON SIMULATION
-                                NativeIconView(appID: appID)
-                                Text(appID.bundleId.split(separator: ".").last?.capitalized ?? "App")
-                                    .font(.system(size: 10))
-                                    .lineLimit(1)
-                            }
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(0..<maxDisplayCount, id: \.self) { index in
+                        if index < appIds.count {
+                            let appId = appIds[index]
+                            AppIconWithLabel(appId: appId)
+                        } else {
+                            // Empty placeholder to maintain grid
+                            Color.clear.frame(height: 50)
                         }
                     }
                 }
             } else {
-                Text("No matching Space found")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                ContentUnavailableView("No Space", systemImage: "square.grid.2x2")
             }
-            Spacer()
         }
-        .padding(.vertical, 4)
+    }
+    
+    private var maxDisplayCount: Int {
+        switch family {
+        case .systemSmall: return 4
+        case .systemMedium: return 8
+        default: return 8
+        }
     }
 }
 
-struct NativeIconView: View {
-    let appID: AppID
+struct AppIconWithLabel: View {
+    let appId: String
     
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LinearGradient(gradient: Gradient(colors: [.white, Color(.systemGray6)]), startPoint: .top, endPoint: .bottom))
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
+        VStack(spacing: 4) {
+            ZStack {
+                // Native Icon lookalike
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(LinearGradient(colors: [.white, Color(.systemGray6)], startPoint: .top, endPoint: .bottom))
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                
+                if let app = AppRegistry.shared.get(id: appId) {
+                    Image(systemName: app.icon)
+                        .font(.system(size: 24))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    Image(systemName: "app.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.gray)
+                }
+            }
+            .frame(width: 48, height: 48)
             
-            // Map known bundle IDs to SF Symbols that represent the "Native" look
-            Image(systemName: symbolForBundleId(appID.bundleId))
-                .foregroundStyle(colorForBundleId(appID.bundleId))
-                .font(.title3)
-        }
-        .frame(width: 44, height: 44)
-    }
-    
-    private func symbolForBundleId(_ id: String) -> String {
-        switch id {
-        case "com.apple.Music": return "music.note"
-        case "com.apple.mail": return "envelope.fill"
-        case "com.apple.mobilesafari": return "safari.fill"
-        case "com.apple.calendar": return "calendar"
-        case "com.apple.Preferences": return "gearshape.fill"
-        case "com.spotify.client": return "waveform"
-        case "com.tinyspeck.chatlyio": return "bubble.left.and.bubble.right.fill"
-        default: return "app.fill"
-        }
-    }
-    
-    private func colorForBundleId(_ id: String) -> Color {
-        switch id {
-        case "com.apple.Music": return .pink
-        case "com.apple.mail": return .blue
-        case "com.apple.mobilesafari": return .blue
-        case "com.apple.calendar": return .red
-        case "com.apple.Preferences": return .gray
-        case "com.spotify.client": return .green
-        case "com.tinyspeck.chatlyio": return .purple
-        default: return .accentColor
+            if let app = AppRegistry.shared.get(id: appId) {
+                Text(app.name)
+                    .font(.system(size: 10, weight: .medium))
+                    .lineLimit(1)
+            }
         }
     }
 }
@@ -161,8 +123,8 @@ struct formaWidget: Widget {
             WidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("Smart Intent")
-        .description("Shows the space matching your current intent.")
+        .configurationDisplayName("Space View")
+        .description("Display apps from your chosen space.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

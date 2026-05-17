@@ -13,65 +13,55 @@ struct SpaceEditorView: View {
             Section("General") {
                 TextField("Name", text: $space.name)
                 TextField("Icon (SF Symbol)", text: $space.icon)
-                Toggle("Dynamic Learning", isOn: $space.isDynamic)
             }
             
-            Section("Tags & Automation") {
+            Section("Tags (for Affinity Engine)") {
                 HStack {
-                    TextField("Add tag (e.g. Work, Morning)", text: $newTag)
+                    TextField("Add tag", text: $newTag)
                     Button("Add") {
                         if !newTag.isEmpty {
-                            space.tags.append(newTag)
+                            var currentTags = space.tags
+                            currentTags.append(newTag)
+                            space.tags = currentTags
                             newTag = ""
                         }
                     }
                 }
                 
-                FlowLayout(spacing: 8) {
-                    ForEach(space.tags, id: \.self) { tag in
+                ForEach(space.tags, id: \.self) { tag in
+                    HStack {
                         Text(tag)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.accentColor.opacity(0.1))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Color.accentColor, lineWidth: 1))
-                            .onTapGesture {
-                                space.tags.removeAll { $0 == tag }
-                            }
-                    }
-                }
-                .padding(.vertical, 5)
-            }
-            
-            Section("App Ordering (Drag to sort)") {
-                List {
-                    ForEach(space.orderedAppIds, id: \.self) { bundleId in
-                        HStack {
-                            Image(systemName: "app")
-                            Text(bundleId)
+                        Spacer()
+                        Button(role: .destructive) {
+                            var currentTags = space.tags
+                            currentTags.removeAll { $0 == tag }
+                            space.tags = currentTags
+                        } label: {
+                            Image(systemName: "xmark.circle")
                         }
                     }
-                    .onMove { indices, newOffset in
-                        space.orderedAppIds.move(fromOffsets: indices, toOffset: newOffset)
+                }
+            }
+            
+            Section("Apps (Ordered)") {
+                List {
+                    ForEach(space.appIds, id: \.self) { appId in
+                        if let app = AppRegistry.shared.get(id: appId) {
+                            HStack {
+                                Image(systemName: app.icon)
+                                    .foregroundStyle(Color.accentColor)
+                                Text(app.name)
+                            }
+                        }
                     }
                     .onDelete { indices in
-                        space.orderedAppIds.remove(atOffsets: indices)
+                        var currentAppIds = space.appIds
+                        currentAppIds.remove(atOffsets: indices)
+                        space.appIds = currentAppIds
                     }
                 }
                 
-                Button(action: { showingAppPicker = true }) {
-                    Label("Add App to Space", systemImage: "plus")
-                }
-            }
-            
-            Section("Advanced Rules") {
-                if space.rules.isEmpty {
-                    Text("No complex rules defined").foregroundStyle(.secondary)
-                } else {
-                    ForEach(space.rules) { rule in
-                        Text("Rule: \(rule.id.uuidString.prefix(4))")
-                    }
-                }
+                Button("Add App") { showingAppPicker = true }
             }
             
             Section {
@@ -84,49 +74,53 @@ struct SpaceEditorView: View {
         .navigationTitle("Edit Space")
         .sheet(isPresented: $showingAppPicker) {
             AppGalleryView { selectedApp in
-                if !space.orderedAppIds.contains(selectedApp.id) {
-                    space.orderedAppIds.append(selectedApp.id)
+                var currentAppIds = space.appIds
+                if !currentAppIds.contains(selectedApp.id) {
+                    currentAppIds.append(selectedApp.id)
+                    space.appIds = currentAppIds
                 }
             }
         }
     }
 }
 
-// Simple FlowLayout for tags
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        var width: CGFloat = proposal.width ?? 300
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        
-        for size in sizes {
-            if currentX + size.width > width {
-                currentX = 0
-                currentY += lineHeight + spacing
-                lineHeight = 0
+struct AppGalleryView: View {
+    @Environment(\.dismiss) private var dismiss
+    let onSelect: (SystemApp) -> Void
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(SystemApp.AppCategory.allCases, id: \.self) { category in
+                    let apps = AppDiscoveryService.shared.discoveredApps.filter { $0.category == category }
+                    if !apps.isEmpty {
+                        Section(category.rawValue) {
+                            ForEach(apps) { app in
+                                Button {
+                                    onSelect(app)
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: app.icon)
+                                            .frame(width: 30)
+                                        VStack(alignment: .leading) {
+                                            Text(app.name)
+                                                .font(.subheadline)
+                                            Text(app.id)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "plus.circle")
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
             }
-            currentX += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
-        return CGSize(width: width, height: currentY + lineHeight)
-    }
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var currentX: CGFloat = bounds.minX
-        var currentY: CGFloat = bounds.minY
-        var lineHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if currentX + size.width > bounds.maxX {
-                currentX = bounds.minX
-                currentY += lineHeight + spacing
-                lineHeight = 0
-            }
-            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: ProposedViewSize(size))
-            currentX += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
+            .navigationTitle("Add App")
         }
     }
 }

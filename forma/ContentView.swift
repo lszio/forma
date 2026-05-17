@@ -3,145 +3,110 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var contextManager = ContextManager()
-    @StateObject private var resolver: IntentResolver
+    @Query(sort: \Space.lastModified, order: .reverse) private var spaces: [Space]
+    @StateObject private var discoveryService = AppDiscoveryService.shared
     
-    init(modelContext: ModelContext) {
-        _resolver = StateObject(wrappedValue: IntentResolver(modelContext: modelContext))
-    }
-
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    SectionHeader(title: "Current Intent")
-                    
-                    if resolver.activeSpaces.isEmpty {
-                        ContentUnavailableView("No Active Intent", systemImage: "sparkles", description: Text("Your context doesn't match any spaces right now."))
-                            .frame(height: 200)
-                    } else {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                            ForEach(resolver.activeSpaces) { space in
-                                NavigationLink(value: space) {
-                                    SpaceCardView(space: space, isActive: true)
+            List {
+                Section {
+                    ForEach(spaces) { space in
+                        NavigationLink(destination: SpaceEditorView(space: space)) {
+                            HStack(spacing: 15) {
+                                Image(systemName: space.icon)
+                                    .foregroundStyle(.white)
+                                    .padding(8)
+                                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8))
+                                
+                                VStack(alignment: .leading) {
+                                    Text(space.name)
+                                        .font(.headline)
+                                    if space.isAllAppsSpace {
+                                        Text("Auto-syncing all apps")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    } else if !space.tags.isEmpty {
+                                        Text(space.tags.joined(separator: ", "))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                
+                                Spacer()
+                                
+                                Text("\(space.appIds.count) Apps")
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color(.systemGray5), in: Capsule())
                             }
                         }
                     }
-                    
-                    SectionHeader(title: "All Spaces")
-                    
-                    SpaceList(modelContext: modelContext, resolver: resolver)
+                    .onDelete(perform: deleteSpaces)
+                } header: {
+                    Text("Your Spaces")
                 }
-                .padding()
+                
+                Button(action: addSpace) {
+                    Label("Create New Space", systemImage: "plus.circle.fill")
+                }
             }
-            .navigationTitle("Intent Layer")
-            .navigationDestination(for: Space.self) { space in
-                SpaceDetailView(space: space, context: contextManager.currentContext)
-            }
+            .navigationTitle("Forma")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: addDefaultSpaces) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+                    Button(action: { discoveryService.performDiscovery() }) {
+                        Image(systemName: "arrow.clockwise.circle")
                     }
                 }
             }
             .onAppear {
-                resolver.update(with: contextManager.currentContext)
+                discoveryService.performDiscovery()
+                ensureDefaultSpace()
+            }
+            .onChange(of: discoveryService.discoveredApps) { _ in
+                syncAllAppsSpace()
             }
         }
     }
-
-    private func addDefaultSpaces() {
-        let workRule = Rule(triggerNode: .time(TimeRule(startHour: 9, endHour: 18, weekdays: [2, 3, 4, 5, 6])), targetApps: [AppID(bundleId: "com.apple.mail")], priority: 1)
-        let workSpace = Space(
-            name: "Work",
-            icon: "briefcase",
-            rules: [workRule]
-        )
-        
-        let homeRule = Rule(triggerNode: .or([
-                .time(TimeRule(startHour: 18, endHour: 23, weekdays: [1, 2, 3, 4, 5, 6, 7])),
-                .time(TimeRule(startHour: 7, endHour: 9, weekdays: [1, 2, 3, 4, 5, 6, 7]))
-            ]), targetApps: [AppID(bundleId: "com.apple.Music")], priority: 1)
-        let homeSpace = Space(
-            name: "Home",
-            icon: "house",
-            rules: [homeRule]
-        )
-        
-        modelContext.insert(workSpace)
-        modelContext.insert(homeSpace)
-
-        resolver.update(with: contextManager.currentContext)
-    }
-}
-
-struct SectionHeader: View {
-    let title: String
-    var body: some View {
-        Text(title)
-            .font(.title3.bold())
-            .padding(.top)
-    }
-}
-
-struct SpaceList: View {
-    let modelContext: ModelContext
-    @ObservedObject var resolver: IntentResolver
-    @Query private var allSpaces: [Space]
     
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            ForEach(allSpaces) { space in
-                if !resolver.activeSpaces.contains(where: { $0.id == space.id }) {
-                    NavigationLink(value: space) {
-                        SpaceCardView(space: space, isActive: false)
-                    }
-                    .buttonStyle(.plain)
-                }
+    private func ensureDefaultSpace() {
+        if !spaces.contains(where: { $0.isAllAppsSpace }) {
+            let dashboard = Space(
+                name: "All Apps", 
+                icon: "square.grid.2x2.fill", 
+                tags: ["System"], 
+                appIds: discoveryService.discoveredApps.map { $0.id },
+                isAllAppsSpace: true
+            )
+            modelContext.insert(dashboard)
+            try? modelContext.save()
+        }
+    }
+    
+    private func syncAllAppsSpace() {
+        if let allAppsSpace = spaces.first(where: { $0.isAllAppsSpace }) {
+            let newIds = discoveryService.discoveredApps.map { $0.id }
+            if allAppsSpace.appIds != newIds {
+                allAppsSpace.appIds = newIds
+                allAppsSpace.lastModified = Date()
+                try? modelContext.save()
             }
         }
     }
-}
-
-struct SpaceDetailView: View {
-    @Bindable var space: Space
-    let context: Context
     
-    var body: some View {
-        let targetApps = ConflictResolver.resolveApps(for: space, context: context)
-        
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 20) {
-                if targetApps.isEmpty {
-                    Text("No apps predicted")
-                        .foregroundStyle(.secondary)
-                        .padding()
-                } else {
-                    ForEach(targetApps) { appID in
-                        AppIconView(appID: appID)
-                            .onTapGesture {
-                                // Simulate launching the app and recording the interaction
-                                LearningEngine.shared.recordInteraction(with: appID, in: space)
-                                ActionExecutor.shared.execute(.openApp(appID, scheme: nil))
-                            }
-                    }
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(space.name)
-        .toolbar {
-            ToolbarItem {
-                NavigationLink {
-                    SpaceEditorView(space: space)
-                } label: {
-                    Text("Edit")
-                }
+    private func addSpace() {
+        let newSpace = Space(name: "New Space", icon: "folder.fill")
+        modelContext.insert(newSpace)
+        try? modelContext.save()
+    }
+    
+    private func deleteSpaces(offsets: IndexSet) {
+        for index in offsets {
+            let space = spaces[index]
+            if !space.isAllAppsSpace {
+                modelContext.delete(space)
             }
         }
+        try? modelContext.save()
     }
 }

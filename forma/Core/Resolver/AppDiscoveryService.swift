@@ -1,84 +1,47 @@
 import Foundation
-import SwiftUI
 import Combine
+#if os(iOS)
+import UIKit
+#endif
 
-// SICP: Stream-like processing of app discovery
 @MainActor
 class AppDiscoveryService: ObservableObject {
-    @Published var availableApps: [SystemApp] = []
-    @Published var isScanning = false
-    
     static let shared = AppDiscoveryService()
     
-    private init() {}
+    @Published var discoveredApps: [SystemApp] = []
     
-    func performDiscovery() async {
-        isScanning = true
-        
-        var found: [SystemApp] = []
-        
-        // 1. Check Library Apps
-        for app in SystemApp.library {
-            if isAppInstalled(bundleId: app.id, scheme: app.scheme) {
-                found.append(app)
-            }
-        }
-        
-        // 2. Scan /Applications (macOS only)
-        #if os(macOS)
-        let localApps = scanApplicationsDirectory()
-        for app in localApps {
-            if !found.contains(where: { $0.id == app.id }) {
-                found.append(app)
-            }
-        }
-        #endif
-        
-        self.availableApps = found
-        isScanning = false
+    private init() {
+        self.discoveredApps = AppRegistry.shared.library
     }
     
-    private func isAppInstalled(bundleId: String, scheme: String) -> Bool {
+    /// Scans the system for installed apps using known URL schemes.
+    func performDiscovery() {
         #if os(iOS)
-        if let url = URL(string: scheme), UIApplication.shared.canOpenURL(url) {
-            return true
-        }
-        return false
-        #elseif os(macOS)
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) != nil
-        #else
-        return false
-        #endif
-    }
-    
-    #if os(macOS)
-    private func scanApplicationsDirectory() -> [SystemApp] {
-        let fileManager = FileManager.default
-        let appDir = "/Applications"
-        var foundApps: [SystemApp] = []
+        var updatedApps = AppRegistry.shared.library
         
-        do {
-            let contents = try fileManager.contentsOfDirectory(atPath: appDir)
-            for item in contents where item.hasSuffix(".app") {
-                let appPath = (appDir as NSString).appendingPathComponent(item)
-                if let bundle = Bundle(path: appPath) {
-                    let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? item.replacingOccurrences(of: ".app", with: "")
-                    let bundleId = bundle.bundleIdentifier ?? "unknown.\(item)"
-                    
-                    foundApps.append(SystemApp(
-                        id: bundleId,
-                        name: name,
-                        icon: "app", // Default icon for now
-                        scheme: "",
-                        category: .custom
+        // Extended list of common iOS app schemes
+        let commonSchemes = [
+            "youtube://", "twitter://", "instagram://", "fb://", 
+            "slack://", "microsoft-edge://", "googlechrome://",
+            "spotify://", "whatsapp://", "tg://", "discord://",
+            "zoomus://", "notion://", "linear://"
+        ]
+        
+        for scheme in commonSchemes {
+            if let url = URL(string: scheme), UIApplication.shared.canOpenURL(url) {
+                let id = scheme.replacingOccurrences(of: "://", with: "")
+                if !updatedApps.contains(where: { $0.scheme == scheme }) {
+                    updatedApps.append(SystemApp(
+                        id: "com.discovered.\(id)",
+                        name: id.capitalized,
+                        icon: "app.badge.fill",
+                        scheme: scheme,
+                        category: .system
                     ))
                 }
             }
-        } catch {
-            print("Error scanning /Applications: \(error)")
         }
-        
-        return foundApps
+        self.discoveredApps = updatedApps
+        #endif
     }
-    #endif
 }
